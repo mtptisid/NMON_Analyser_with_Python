@@ -55,6 +55,10 @@ Ensure the Sendmail service is properly configured on your system.
 
 ## Installation
 
+## Snapshots
+![image](https://github.com/user-attachments/assets/1fcf31d6-b6a7-4e41-aa7b-b6a71c9c9677)
+
+
 1. Clone this repository:
    ```bash
    git clone https://github.com/mtptisid/NMON_Analyser_with_Python.git
