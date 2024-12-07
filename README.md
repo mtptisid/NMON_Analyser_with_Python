@@ -61,9 +61,9 @@ Ensure the Sendmail service is properly configured on your system.
    cd NMON_Analyser_with_Python
     ```
 2.	Install required Python libraries:
-   ```
-   pip install -r requirements.txt
-   ```
+    ```
+    pip install -r requirements.txt
+    ```
 
 ## Usage
 
