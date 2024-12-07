@@ -60,6 +60,23 @@ Ensure the Sendmail service is properly configured on your system.
    git clone https://github.com/mtptisid/NMON_Analyser_with_Python.git
    cd NMON_Analyser_with_Python
     ```
+2.	Install required Python libraries:
+   ```
+   pip install -r requirements.txt
+   ```
+
+## Usage
+
+Run the script with the required arguments for hosts and dates. The script supports analyzing multiple hosts and dates by iterating through the inputs.
+
+## Command
+  ```
+  python nmon_analysis.py --host <host1,host2,...> --date <date1,date2,...>
+  ```
+## Example
+  ```
+  python nmon_analysis.py --host my_host_001,my_host_002 --date 2024-11-21,2024-11-22
+  ```
 
 
 ## Snapshots
