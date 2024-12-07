@@ -73,6 +73,7 @@ Run the script with the required arguments for hosts and dates. The script suppo
   ```
   python nmon_analysis.py --host <host1,host2,...> --date <date1,date2,...>
   ```
+
 ## Example
   ```
   python nmon_analysis.py --host my_host_001,my_host_002 --date 2024-11-21,2024-11-22
