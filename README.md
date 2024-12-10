@@ -83,3 +83,18 @@ Run the script with the required arguments for hosts and dates. The script suppo
 ## Snapshots
 ![image](https://github.com/user-attachments/assets/1fcf31d6-b6a7-4e41-aa7b-b6a71c9c9677)
 
+![image](https://github.com/user-attachments/assets/0fd92fdd-61b2-4094-826f-a0885c8c8bac)
+
+![image](https://github.com/user-attachments/assets/29db0e50-3e1d-4ea2-8289-41edb92abb61)
+
+![image](https://github.com/user-attachments/assets/865f966e-add2-4efb-838a-e23f07e7b424)
+
+![image](https://github.com/user-attachments/assets/8659c9ef-569b-40dc-9f81-f64fe4aa2718)
+
+![image](https://github.com/user-attachments/assets/ab12d46c-f7f0-4580-a8cd-b53208fa3400)
+
+
+
+
+
+
