@@ -78,7 +78,51 @@ Run the script with the required arguments for hosts and dates. The script suppo
   ```
   python nmon_analysis.py --host my_host_001,my_host_002 --date 2024-11-21,2024-11-22
   ```
+## Configuration
 
+The main configurations are set inside the script:
+
+	•	Remote NMON Path: /tools/list/admin/perf/nmon
+	•	Output Directory: ./output
+	•	SMTP Server: Sendmail service (configured locally).
+	•	Metrics Analyzed:
+	•	CPU
+	•	Memory
+	•	Network I/O
+	•	File Systems
+	•	Swap Usage
+	•	Disk Activity
+
+You can modify these paths or parameters in the code as needed.
+
+## Output
+	•	A separate directory will be created for each host under the output/ folder.
+	•	Each host directory contains:
+	•	The fetched NMON file.
+	•	Generated plots for each metric.
+	•	The final .docx report.
+
+### The report includes:
+	•	Graphical representation of metrics.
+	•	Summarized insights for system performance.
+
+Example Directory Structure:
+
+```
+output/
+├── my_host_001/
+│   ├── 2024-11-21.nmon
+│   ├── 2024-11-21-analysis.docx
+│   ├── cpu_usage.png
+│   ├── memory_usage.png
+│   └── ...
+├── my_host_002/
+│   ├── 2024-11-22.nmon
+│   ├── 2024-11-22-analysis.docx
+│   ├── cpu_usage.png
+│   ├── memory_usage.png
+│   └── ...
+```
 
 ## Snapshots
 ![image](https://github.com/user-attachments/assets/1fcf31d6-b6a7-4e41-aa7b-b6a71c9c9677)
@@ -93,6 +137,17 @@ Run the script with the required arguments for hosts and dates. The script suppo
 
 ![image](https://github.com/user-attachments/assets/ab12d46c-f7f0-4580-a8cd-b53208fa3400)
 
+
+## Email Integration
+
+The tool automatically emails all the generated reports once the analysis is complete.
+
+### Email Configuration:
+	•	SMTP Service: Sendmail (no password required).
+	•	Mail Body: Pre-configured in the script.
+	•	Subject: “NMON Analysis Reports”.
+
+Ensure the recipient email and SMTP server are correctly configured in the code.
 
 
 
