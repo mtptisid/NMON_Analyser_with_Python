@@ -143,9 +143,10 @@ output/
 The tool automatically emails all the generated reports once the analysis is complete.
 
 ### Email Configuration:
-	•	SMTP Service: Sendmail (no password required).
+	•	SMTP Service: Sendmail.
 	•	Mail Body: Pre-configured in the script.
 	•	Subject: “NMON Analysis Reports”.
+ 	•	attachments: will be attaching the document.
 
 Ensure the recipient email and SMTP server are correctly configured in the code.
 
