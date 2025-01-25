@@ -27,6 +27,8 @@ from itertools import product
 from docx.shared import Inches
 from docx.oxml import parse_xml
 import matplotlib.pyplot as plt
+from docx.oxml.shared import qn
+from docx.oxml import OxmlElement
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from email.mime.base import MIMEBase
@@ -35,13 +37,37 @@ from email.mime.multipart import MIMEMultipart
 
 
 def ssh_copy_file(host, remote_path, local_path):
-    """Connects via SSH to copy a file."""
+    """Connects via SSH to copy a file, matching any extension."""
     try:
+        # Extract the base path and file name without extension
+        base_path, file_name = os.path.split(remote_path)
+        file_base, _ = os.path.splitext(file_name)
+
+        # Connect to the remote host
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh.connect(hostname=host, username='sysadm', port=77)
+
+        # List files in the remote directory
+        stdin, stdout, stderr = ssh.exec_command(f'ls {base_path}')
+        files = stdout.read().decode().splitlines()
+
+        # Find matching files
+        matching_files = [f for f in files if f.startswith(f"{base_path}/{file_base}")]
+
+        if not matching_files:
+            print(f"No matching files found for {remote_path}")
+            ssh.close()
+            return
+
+        # Copy each matching file
         with SCPClient(ssh.get_transport()) as scp:
-            scp.get(remote_path, local_path)
+            for remote_file in matching_files:
+                # Construct the local file path
+                local_file = os.path.join(local_path, os.path.basename(remote_file))
+                print(f"Copying {remote_file} to {local_file}")
+                scp.get(remote_file, local_file)
+
         ssh.close()
     except Exception as e:
         print(f"Error during SSH/SCP: {e}")
@@ -616,8 +642,7 @@ def process_and_plot_top_data(top_df, top_n=80):
 
 
 ## creating document
-
-def create_document_with_images(metrics, image_dir, output_dir, document_name):
+def create_document_with_images(metrics, image_dir, output_dir, document_name, hostname, date, image_height=3, image_width=7, main_heading="NMON Analysis Report"):
     """
     Create a Word document with images added two per page, with adjusted height.
 
@@ -626,39 +651,63 @@ def create_document_with_images(metrics, image_dir, output_dir, document_name):
     - image_dir (str): Directory where images are stored.
     - output_dir (str): Directory where the document will be saved.
     - document_name (str): Name of the output document file.
+    - hostname (str): Hostname of the server.
+    - date (str): Date for the report.
+    - image_height (float): Height of images in inches.
+    - image_width (float): Width of images in inches.
+    - main_heading (str): Main heading for the document.
     """
-    global CONFIG
+    # Set up logging
+    logging.basicConfig(level=logging.INFO)
+
+    # Validate inputs
+    if not os.path.exists(image_dir):
+        logging.error(f"Image directory '{image_dir}' does not exist.")
+        return None
+
+    if not metrics:
+        logging.error("No metrics provided.")
+        return None
+
+    # Create document
     doc = Document()
-    doc.add_heading('NMON Analysis Report', level=1)
+    doc.add_heading(main_heading, level=1)
 
     for metric in metrics:
-        # Find images in the directory that match the current metric
+        # Find images matching the metric
         matched_images = [
             os.path.join(image_dir, img)
             for img in os.listdir(image_dir)
-            if metric in img and img.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif'))
+            if metric.lower() in img.lower() and img.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif'))
         ]
 
         if not matched_images:
-            #print(f"No images found for metric '{metric}'. Skipping...")
+            logging.info(f"No images found for metric '{metric}'. Skipping...")
             continue
 
         # Add a heading for the metric
-        doc.add_heading(f'{metric} Usage on server {CONFIG["HOSTNAME"]} for the date {CONFIG["DATE"]}', level=2)
+        doc.add_heading(f'{metric} Usage on server {hostname} for the date {date}', level=2)
 
         # Add images, two per page
         for idx, image_path in enumerate(matched_images):
-            doc.add_picture(image_path, height=Inches(3), width=Inches(7))
-            if (idx + 1) % 2 == 0:  # Add a page break after every 2 images
-                doc.add_page_break()
+            try:
+                doc.add_picture(image_path, height=Inches(image_height), width=Inches(image_width))
+                if (idx + 1) % 2 == 0:  # Add a page break after every 2 images
+                    doc.add_page_break()
+            except Exception as e:
+                logging.error(f"Error adding image {image_path}: {e}")
 
     # Ensure the output directory exists
     os.makedirs(output_dir, exist_ok=True)
 
     # Save the document
     doc_path = os.path.join(output_dir, document_name)
-    doc.save(doc_path)
-    #print(f"Document saved to {doc_path}")
+    try:
+        doc.save(doc_path)
+        logging.info(f"Document saved to {doc_path}")
+    except Exception as e:
+        logging.error(f"Error saving document: {e}")
+        return None
 
     return doc_path
 
@@ -714,42 +763,46 @@ def send_email(host_dirs, body,  out_dir):
 
 
 ### Document concatination for attachments.
-
 def extract_header_footer(doc):
-    """Extract header and footer from the top document."""
+    """Extract header and footer from the document."""
     header = doc.sections[0].header
     footer = doc.sections[0].footer
 
-    # Copy header and footer paragraphs
-    header_paragraphs = [para.text for para in header.paragraphs]
-    footer_paragraphs = [para.text for para in footer.paragraphs]
+    # Return the entire header and footer elements
+    return header, footer
 
-    return header_paragraphs, footer_paragraphs
-
-def add_header_footer_to_middle(middle_doc, header_paragraphs, footer_paragraphs):
+def add_header_footer_to_middle(middle_doc, header, footer):
     """Add the extracted header and footer to the middle document."""
-    # Insert header at the start of the middle document
-    for paragraph in header_paragraphs:
-        middle_doc.add_paragraph(paragraph)
+    # Add header to the middle document
+    middle_header = middle_doc.sections[0].header
+    for paragraph in header.paragraphs:
+        new_para = middle_header.add_paragraph()
+        for run in paragraph.runs:
+            new_run = new_para.add_run(run.text)
+            new_run.bold = run.bold
+            new_run.italic = run.italic
+            new_run.underline = run.underline
+            new_run.font.name = run.font.name
+            new_run.font.size = run.font.size
 
-    # Add middle content (if any, no changes here)
+    # Add footer to the middle document
+    middle_footer = middle_doc.sections[0].footer
+    for paragraph in footer.paragraphs:
+        new_para = middle_footer.add_paragraph()
+        for run in paragraph.runs:
+            new_run = new_para.add_run(run.text)
+            new_run.bold = run.bold
+            new_run.italic = run.italic
+            new_run.underline = run.underline
+            new_run.font.name = run.font.name
+            new_run.font.size = run.font.size
 
-    # Insert footer at the end of the middle document
-    for paragraph in footer_paragraphs:
-        middle_doc.add_paragraph(paragraph)
-
-def copy_images(source_docx, target_docx):
+def copy_images(source_doc, target_doc):
     """Copy images from the source document to the target document."""
-    with zipfile.ZipFile(source_docx, 'r') as source_zip:
-        with zipfile.ZipFile(target_docx, 'a') as target_zip:
-            # Extract image files from the source document
-            for file in source_zip.namelist():
-                if file.startswith('word/media/'):  # This is where images are stored
-                    # Read the image file content and write it to the target document
-                    image_data = source_zip.read(file)
-                    target_zip.writestr(file, image_data)
-
-    print(f"Images copied successfully from {source_docx} to {target_docx}")
+    for rel in source_doc.part.rels.values():
+        if "image" in rel.target_ref:
+            image_part = rel.target_part.blob
+            target_doc.add_picture(image_part)
 
 def concat_documents_with_styles(top_docx, middle_docx, bottom_docx, output_docx):
     """Merge the three documents, adding the header/footer from the top document to the middle one."""
@@ -759,37 +812,33 @@ def concat_documents_with_styles(top_docx, middle_docx, bottom_docx, output_docx
     bottom_doc = Document(bottom_docx)
 
     # Extract the header and footer from the top document
-    header_paragraphs, footer_paragraphs = extract_header_footer(top_doc)
+    header, footer = extract_header_footer(top_doc)
 
     # Add header and footer to the middle document
-    add_header_footer_to_middle(middle_doc, header_paragraphs, footer_paragraphs)
+    add_header_footer_to_middle(middle_doc, header, footer)
 
-    # Save the modified middle document to a temporary file
-    temp_middle_path = 'temp_middle.docx'
-    middle_doc.save(temp_middle_path)
-
-    # Now create the final output document by combining top, modified middle, and bottom documents
+    # Create the final output document
     final_doc = Document()
 
-    # Add top document content (no changes)
-    for para in top_doc.paragraphs:
-        final_doc.add_paragraph(para.text)
+    # Copy content from the top document
+    for element in top_doc.element.body:
+        final_doc.element.body.append(element)
 
-    # Add middle document content (with added header and footer)
-    for para in middle_doc.paragraphs:
-        final_doc.add_paragraph(para.text)
+    # Copy content from the middle document
+    for element in middle_doc.element.body:
+        final_doc.element.body.append(element)
 
-    # Add bottom document content (no changes)
-    for para in bottom_doc.paragraphs:
-        final_doc.add_paragraph(para.text)
+    # Copy content from the bottom document
+    for element in bottom_doc.element.body:
+        final_doc.element.body.append(element)
 
     # Save the final merged document
     final_doc.save(output_docx)
 
-    # Now we will copy images from all the documents into the merged document
-    copy_images(top_docx, output_docx)
-    copy_images(middle_docx, output_docx)
-    copy_images(bottom_docx, output_docx)
+    # Copy images from all documents into the merged document
+    copy_images(top_doc, final_doc)
+    copy_images(middle_doc, final_doc)
+    copy_images(bottom_doc, final_doc)
 
     print(f"Documents merged successfully into: {output_docx}")
 
@@ -836,6 +885,8 @@ def main():
             CONFIG["HOSTOUTDIR"],
             CONFIG["HOSTOUTDIR"],
             CONFIG["DOCUMENT_NAME"]
+            CONFIG["HOSTNAME"],
+            CONFIG["DATE"],
         )
 
         concat_documents_with_styles(CONFIG["TOPDOCFORMAT"], middle_doc_path, CONFIG["BOTTOMDOCFORMAT"], CONFIG["FINALDOCNAME"])
