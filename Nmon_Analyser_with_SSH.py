@@ -7,7 +7,6 @@
 ######## Version       : 2.0                                             ##
 ###########################################################################
 
-
 import os
 import re
 import shutil
@@ -15,6 +14,9 @@ import smtplib
 import zipfile
 import paramiko
 import argparse
+import logging
+from docx import Document
+from io import BytesIO
 import numpy as np
 import pandas as pd
 from lxml import etree
@@ -470,7 +472,7 @@ def plot_filesystem(fs_df):
     plt.close()
 
 
-def plot_network_usage(net_df,  start_time="00:00:00", interval_seconds=30, num_records=2879):
+def plot_network_usage(net_df, start_time="00:00:00", interval_seconds=30, num_records=2879):
     """
     Cleans the input DataFrame, separates NET and NETPACKET data,
     and creates stack plots for network usage data.
@@ -498,22 +500,21 @@ def plot_network_usage(net_df,  start_time="00:00:00", interval_seconds=30, num_
         start_datetime + timedelta(seconds=i * interval_seconds) for i in range(num_records)
     ]
 
+    # Dynamically detect columns to convert
+    columns_to_convert = [col for col in net_df.columns if 'KB/s' in col]
+
     # Convert numeric columns to float
-    columns_to_convert = ["lo-read-KB/s", "ens32-read-KB/s", "lo-write-KB/s", "ens32-write-KB/s"]
     for col in columns_to_convert:
         net_data[col] = pd.to_numeric(net_data[col], errors="coerce")
         netpacket_data[col] = pd.to_numeric(netpacket_data[col], errors="coerce")
 
-
-    # Plot NET data
+    # Plot NET data dynamically
     plt.figure(figsize=(18, 6))
+    net_data_columns = [col for col in net_data.columns if 'KB/s' in col]
     plt.stackplot(
         net_data["Timestamp"],
-        net_data["lo-read-KB/s"],
-        net_data["ens32-read-KB/s"],
-        net_data["lo-write-KB/s"],
-        net_data["ens32-write-KB/s"],
-        labels=["lo-read-KB/s", "ens32-read-KB/s", "lo-write-KB/s", "ens32-write-KB/s"]
+        [net_data[col] for col in net_data_columns],
+        labels=net_data_columns
     )
     plt.title(f'Network Traffic (NET)  {CONFIG["HOSTNAME"]} - {CONFIG["DATE"]}')
     plt.xlabel("Timestamp")
@@ -524,36 +525,36 @@ def plot_network_usage(net_df,  start_time="00:00:00", interval_seconds=30, num_
     x_ticks = pd.date_range(start=start_datetime, periods=num_records // 60, freq="30min")
     plt.xticks(x_ticks, [t.strftime("%H:%M:%S") for t in x_ticks], rotation=45)
 
-     # Save plot as PNG
+    # Save plot as PNG
     plt.tight_layout()
     png_file = os.path.join(CONFIG["HOSTOUTDIR"], f'{CONFIG["HOSTNAME"]}_NETWORK.png')
     plt.savefig(png_file)
     plt.close()
 
-    # Plot NETPACKET data
+    # Plot NETPACKET data dynamically
     plt.figure(figsize=(18, 6))
+    netpacket_data_columns = [col for col in netpacket_data.columns if 'KB/s' in col]
     plt.stackplot(
         netpacket_data["Timestamp"],
-        netpacket_data["lo-read-KB/s"],
-        netpacket_data["ens32-read-KB/s"],
-        netpacket_data["lo-write-KB/s"],
-        netpacket_data["ens32-write-KB/s"],
-        labels=["lo-read-KB/s", "ens32-read-KB/s", "lo-write-KB/s", "ens32-write-KB/s"]
+        [netpacket_data[col] for col in netpacket_data_columns],
+        labels=netpacket_data_columns
     )
-    plt.title(f'Network Traffic (NETPACKET  {CONFIG["HOSTNAME"]} - {CONFIG["DATE"]}')
+    plt.title(f'Network Traffic (NETPACKET)  {CONFIG["HOSTNAME"]} - {CONFIG["DATE"]}')
     plt.xlabel("Timestamp")
     plt.ylabel("KB/s")
     plt.legend(loc="upper left")
+
     # Set x-axis ticks to 30-minute intervals
     x_ticks = pd.date_range(start=start_datetime, periods=num_records // 60, freq="30min")
     plt.xticks(x_ticks, [t.strftime("%H:%M:%S") for t in x_ticks], rotation=45)
-
 
     # Save plot as PNG
     plt.tight_layout()
     png_file = os.path.join(CONFIG["HOSTOUTDIR"], f'{CONFIG["HOSTNAME"]}_NETPACKETS.png')
     plt.savefig(png_file)
     plt.close()
+
+
 
 
 def process_and_plot_top_data(top_df, top_n=80):
@@ -762,18 +763,14 @@ def send_email(host_dirs, body,  out_dir):
         print(f"Error sending email: {e}")
 
 
-### Document concatination for attachments.
 def extract_header_footer(doc):
     """Extract header and footer from the document."""
     header = doc.sections[0].header
     footer = doc.sections[0].footer
-
-    # Return the entire header and footer elements
     return header, footer
 
 def add_header_footer_to_middle(middle_doc, header, footer):
     """Add the extracted header and footer to the middle document."""
-    # Add header to the middle document
     middle_header = middle_doc.sections[0].header
     for paragraph in header.paragraphs:
         new_para = middle_header.add_paragraph()
@@ -785,7 +782,6 @@ def add_header_footer_to_middle(middle_doc, header, footer):
             new_run.font.name = run.font.name
             new_run.font.size = run.font.size
 
-    # Add footer to the middle document
     middle_footer = middle_doc.sections[0].footer
     for paragraph in footer.paragraphs:
         new_para = middle_footer.add_paragraph()
@@ -802,7 +798,10 @@ def copy_images(source_doc, target_doc):
     for rel in source_doc.part.rels.values():
         if "image" in rel.target_ref:
             image_part = rel.target_part.blob
-            target_doc.add_picture(image_part)
+            # Convert image bytes to a file-like object
+            image_stream = BytesIO(image_part)
+            # Add image to the target document
+            target_doc.add_picture(image_stream)
 
 def concat_documents_with_styles(top_docx, middle_docx, bottom_docx, output_docx):
     """Merge the three documents, adding the header/footer from the top document to the middle one."""
@@ -884,7 +883,7 @@ def main():
             CONFIG["METRICS"],
             CONFIG["HOSTOUTDIR"],
             CONFIG["HOSTOUTDIR"],
-            CONFIG["DOCUMENT_NAME"]
+            CONFIG["DOCUMENT_NAME"],
             CONFIG["HOSTNAME"],
             CONFIG["DATE"],
         )
