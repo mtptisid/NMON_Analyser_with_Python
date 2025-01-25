@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/home/yyz2021/nmon_analyser.py", line 905, in <module>
+    main()
+  File "/home/yyz2021/nmon_analyser.py", line 868, in main
+    concat_documents_with_styles(CONFIG["TOPDOCFORMAT"], middle_doc_path, CONFIG["BOTTOMDOCFORMAT"], CONFIG["FINALDOCNAME"])
+  File "/home/yyz2021/nmon_analyser.py", line 702, in concat_documents_with_styles
+    header, footer = extract_header_footer(top_doc)
+  File "/home/yyz2021/nmon_analyser.py", line 763, in extract_header_footer
+    for element in header.element:
+AttributeError: '_Header' object has no attribute 'element'
